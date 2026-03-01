@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"time"
+
+	"golang.org/x/term"
 )
 
 const (
@@ -41,7 +44,7 @@ func drawBoard(board [][]int, piece Piece) {
 				fmt.Print(". ")
 			}
 		}
-		fmt.Println()
+		fmt.Print("\r\n") // <-- changed from fmt.Println()
 	}
 }
 
@@ -138,13 +141,38 @@ func canMove(board [][]int, piece Piece) bool {
 	return true
 }
 
+func captureInput(ch chan string) {
+    oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+    if err != nil {
+        panic(err)
+    }
+    defer term.Restore(int(os.Stdin.Fd()), oldState)
+
+    buf := make([]byte, 1)
+    for {
+        n, err := os.Stdin.Read(buf)
+        if err != nil || n == 0 {
+            continue
+        }
+        if buf[0] == 3 { // Ctrl+C -- was outside loop before, never executed
+            term.Restore(int(os.Stdin.Fd()), oldState)
+            os.Exit(0)
+        }
+        ch <- string(buf[:n])
+    }
+}
+
 func main() {
+	input := make(chan string)
+	go captureInput(input)
+
 	board := make([][]int, BoardHeight)
 	for i := 0; i < BoardHeight; i++ {
 		board[i] = make([]int, BoardWidth)
 	}
 
 	piece := newSquarePiece()
+	key := ""
 	for {
 		// clearBoard(board)
 
@@ -152,18 +180,21 @@ func main() {
 		removeIfLineIsPresent(board)
 		drawBoard(board, piece)
 
-		var input string
-		fmt.Scanln(&input)
+		select {
+		case key = <-input:
+		default:
+	      key = ""
+		}
 
-		if input == "a" && canMoveSide(board, piece, -1) {
+		if key == "a" && canMoveSide(board, piece, -1) {
 			piece.x--
 		}
 
-		if input == "d" && canMoveSide(board, piece, 1) {
+		if key == "d" && canMoveSide(board, piece, 1) {
 			piece.x++
 		}
 
-		if input == "s" && canMove(board, piece) {
+		if key == "s" && canMove(board, piece) {
 			piece.y++
 		}
 		if canMove(board, piece) {
@@ -171,7 +202,9 @@ func main() {
 		} else {
 			placePieceOnBoard(board, piece)
 			piece = newSquarePiece()
+			
 		}
+		key = ""
 		time.Sleep(300 * time.Millisecond)
 	}
 }
