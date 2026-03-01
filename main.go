@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"os"
 	"time"
-
 	"golang.org/x/term"
 )
 
@@ -13,22 +13,25 @@ const (
 	BoardHeight = 20
 )
 
+var pieces = []Piece{
+	{x: 4, y: 0, shape: [][]int{{1, 1}, {1, 1}}},         // O
+	{x: 3, y: 0, shape: [][]int{{1, 1, 1, 1}}},           // I
+	{x: 4, y: 0, shape: [][]int{{0, 1, 0}, {1, 1, 1}}},   // T
+	{x: 4, y: 0, shape: [][]int{{1, 0}, {1, 0}, {1, 1}}}, // L
+	{x: 4, y: 0, shape: [][]int{{0, 1}, {0, 1}, {1, 1}}}, // J
+	{x: 4, y: 0, shape: [][]int{{0, 1, 1}, {1, 1, 0}}},   // S
+	{x: 4, y: 0, shape: [][]int{{1, 1, 0}, {0, 1, 1}}},   // Z
+}
+
 type Piece struct {
 	x     int
 	y     int
 	shape [][]int
 }
 
-func newSquarePiece() Piece {
-	shape := [][]int{
-		{1, 1},
-		{1, 1},
-	}
-	return Piece{
-		x:     4,
-		y:     0,
-		shape: shape,
-	}
+func newPiece() Piece {
+	p := pieces[rand.Intn(len(pieces))]
+	return Piece{x:p.x, y:p.y, shape: p.shape}
 }
 
 func drawBoard(board [][]int, piece Piece) {
@@ -94,14 +97,6 @@ func placePieceOnBoard(board [][]int, piece Piece) {
 	}
 }
 
-func clearBoard(board [][]int) {
-	for x := 0; x < BoardHeight; x++ {
-		for y := 0; y < BoardWidth; y++ {
-			board[x][y] = 0
-		}
-	}
-}
-
 func canMoveSide(board [][]int, piece Piece, dx int) bool {
 	newX := piece.x + dx
 	if newX < 0 || newX+len(piece.shape[0]) > BoardWidth {
@@ -142,17 +137,27 @@ func canMove(board [][]int, piece Piece) bool {
 }
 
 func captureInput(ch chan string) {
-		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-		if err != nil {
-			panic(err)
-		}
-		buf := make([]byte, 1)
-		defer term.Restore(int(os.Stdin.Fd()), oldState)
+	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+	if err != nil {
+		panic(err)
+	}
+	buf := make([]byte, 1)
+	defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-		for {
-			os.Stdin.Read(buf)
-			ch <- string(buf)
-		}
+	for {
+		os.Stdin.Read(buf)
+		ch <- string(buf)
+	}
+}
+
+
+func isGameOver(board [][]int) bool {
+    for y := 0; y < BoardWidth; y++ {
+        if board[0][y] == 1 {
+            return true
+        }
+    }
+    return false
 }
 
 func main() {
@@ -164,17 +169,11 @@ func main() {
 		board[i] = make([]int, BoardWidth)
 	}
 
-	piece := newSquarePiece()
-	ticker := time.NewTicker(300 * time.Millisecond)
+	piece := newPiece()
+	ticker := time.NewTicker(50 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
-		// clearBoard(board)
-		fmt.Print("\033[2J\033[H")
-		removeIfLineIsPresent(board)
-		drawBoard(board, piece)
-
-
 
 		select {
 		case key := <-input:
@@ -195,9 +194,17 @@ func main() {
 				piece.y++
 			} else {
 				placePieceOnBoard(board, piece)
-				piece = newSquarePiece()
-				
+				if isGameOver(board) {
+					fmt.Print("\033[2J\033[H")
+					fmt.Print("Game over!\r\n")
+					return  
+				}
+				piece = newPiece()
+
 			}
 		}
+		fmt.Print("\033[2J\033[H")
+		removeIfLineIsPresent(board)
+		drawBoard(board, piece)
 	}
 }
