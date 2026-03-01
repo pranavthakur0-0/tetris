@@ -44,7 +44,7 @@ func drawBoard(board [][]int, piece Piece) {
 				fmt.Print(". ")
 			}
 		}
-		fmt.Print("\r\n") // <-- changed from fmt.Println()
+		fmt.Print("\r\n")
 	}
 }
 
@@ -142,24 +142,17 @@ func canMove(board [][]int, piece Piece) bool {
 }
 
 func captureInput(ch chan string) {
-    oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-    if err != nil {
-        panic(err)
-    }
-    defer term.Restore(int(os.Stdin.Fd()), oldState)
+		oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+		if err != nil {
+			panic(err)
+		}
+		buf := make([]byte, 1)
+		defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-    buf := make([]byte, 1)
-    for {
-        n, err := os.Stdin.Read(buf)
-        if err != nil || n == 0 {
-            continue
-        }
-        if buf[0] == 3 { // Ctrl+C -- was outside loop before, never executed
-            term.Restore(int(os.Stdin.Fd()), oldState)
-            os.Exit(0)
-        }
-        ch <- string(buf[:n])
-    }
+		for {
+			os.Stdin.Read(buf)
+			ch <- string(buf)
+		}
 }
 
 func main() {
@@ -172,39 +165,39 @@ func main() {
 	}
 
 	piece := newSquarePiece()
-	key := ""
+	ticker := time.NewTicker(300 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		// clearBoard(board)
-
-		fmt.Print("\033[H\033[2J")
+		fmt.Print("\033[2J\033[H")
 		removeIfLineIsPresent(board)
 		drawBoard(board, piece)
 
+
+
 		select {
-		case key = <-input:
-		default:
-	      key = ""
+		case key := <-input:
+			switch key {
+			case "a":
+				if canMoveSide(board, piece, -1) {
+					piece.x--
+				}
+			case "d":
+				if canMoveSide(board, piece, 1) {
+					piece.x++
+				}
+			case "q":
+				return
+			}
+		case <-ticker.C:
+			if canMove(board, piece) {
+				piece.y++
+			} else {
+				placePieceOnBoard(board, piece)
+				piece = newSquarePiece()
+				
+			}
 		}
-
-		if key == "a" && canMoveSide(board, piece, -1) {
-			piece.x--
-		}
-
-		if key == "d" && canMoveSide(board, piece, 1) {
-			piece.x++
-		}
-
-		if key == "s" && canMove(board, piece) {
-			piece.y++
-		}
-		if canMove(board, piece) {
-			piece.y++
-		} else {
-			placePieceOnBoard(board, piece)
-			piece = newSquarePiece()
-			
-		}
-		key = ""
-		time.Sleep(300 * time.Millisecond)
 	}
 }
