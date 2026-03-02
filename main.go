@@ -137,17 +137,30 @@ func canMove(board [][]int, piece Piece) bool {
 }
 
 func captureInput(ch chan string) {
-	oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
-	if err != nil {
-		panic(err)
-	}
-	buf := make([]byte, 1)
-	defer term.Restore(int(os.Stdin.Fd()), oldState)
+    oldState, err := term.MakeRaw(int(os.Stdin.Fd()))
+    if err != nil {
+        panic(err)
+    }
+    defer term.Restore(int(os.Stdin.Fd()), oldState)
 
-	for {
-		os.Stdin.Read(buf)
-		ch <- string(buf)
-	}
+    buf := make([]byte, 3)
+    for {
+        n, _ := os.Stdin.Read(buf)
+        if n == 3 && buf[0] == '\x1b' && buf[1] == '[' {
+            switch buf[2] {
+            case 'A':
+                ch <- "up"
+            case 'B':
+                ch <- "down"
+            case 'C':
+                ch <- "right"
+            case 'D':
+                ch <- "left"
+            }
+        } else if n == 1 {
+            ch <- string(buf[:1])
+        }
+    }
 }
 
 
@@ -160,6 +173,41 @@ func isGameOver(board [][]int) bool {
     return false
 }
 
+func Rotate(piece Piece) Piece {
+    rows := len(piece.shape)
+    cols := len(piece.shape[0])
+    rotate := make([][]int, cols)
+    for i := range rotate {
+        rotate[i] = make([]int, rows)
+    }
+    for row := 0; row < rows; row++ {
+        for col := 0; col < cols; col++ {
+            rotate[col][rows-1-row] = piece.shape[row][col]
+        }
+    }
+    return Piece{x: piece.x, y: piece.y, shape: rotate}
+}
+
+func canRotate(board [][]int, rotated Piece) bool {
+    if rotated.x < 0 || rotated.x+len(rotated.shape[0]) > BoardWidth {
+        return false
+    }
+    if rotated.y+len(rotated.shape) > BoardHeight {
+        return false
+    }
+    for row := 0; row < len(rotated.shape); row++ {
+        for col := 0; col < len(rotated.shape[0]); col++ {
+            if rotated.shape[row][col] != 1 {
+                continue
+            }
+            if board[rotated.y+row][rotated.x+col] == 1 {
+                return false
+            }
+        }
+    }
+    return true
+}
+
 func main() {
 	input := make(chan string)
 	go captureInput(input)
@@ -170,7 +218,7 @@ func main() {
 	}
 
 	piece := newPiece()
-	ticker := time.NewTicker(50 * time.Millisecond)
+	ticker := time.NewTicker(300 * time.Millisecond)
 	defer ticker.Stop()
 
 	for {
@@ -178,13 +226,22 @@ func main() {
 		select {
 		case key := <-input:
 			switch key {
-			case "a":
+			case "left", "a":
 				if canMoveSide(board, piece, -1) {
 					piece.x--
 				}
-			case "d":
+			case "right", "d":
 				if canMoveSide(board, piece, 1) {
 					piece.x++
+				}
+			case "up", "r":
+				rotated := Rotate(piece)
+				if canRotate(board, rotated) {
+					piece = rotated
+				}
+			case "down", "s":
+				if canMove(board, piece) {
+					piece.y++
 				}
 			case "q":
 				return
